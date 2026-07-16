@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Board</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+
+    <!-- Авторизация -->
+    <div id="auth-screen" class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 mt-10">
+        <h1 class="text-2xl font-bold text-center mb-6" id="auth-title">Вход в Kanban</h1>
+        
+        <div id="login-form">
+            <input id="login-input" type="text" placeholder="Логин" class="border rounded p-3 w-full mb-4">
+            <input id="pass-input" type="password" placeholder="Пароль" class="border rounded p-3 w-full mb-4">
+            <button onclick="doLogin()" class="bg-blue-600 text-white px-6 py-3 rounded w-full font-semibold hover:bg-blue-700 mb-3">Войти</button>
+            <p class="text-center text-gray-600">Нет аккаунта? <button onclick="toggleAuth()" class="text-blue-600 hover:underline">Зарегистрироваться</button></p>
+        </div>
+
+        <div id="register-form" class="hidden">
+            <p class="text-sm text-gray-600 mb-4 bg-yellow-50 p-3 rounded">При регистрации вы автоматически получите роль <strong>Читатель</strong> и сразу войдете в систему.</p>
+            <input id="reg-login" type="text" placeholder="Придумайте логин" class="border rounded p-3 w-full mb-4">
+            <input id="reg-pass" type="password" placeholder="Придумайте пароль" class="border rounded p-3 w-full mb-4">
+            <button onclick="doRegister()" class="bg-green-600 text-white px-6 py-3 rounded w-full font-semibold hover:bg-green-700 mb-3">Зарегистрироваться</button>
+            <p class="text-center text-gray-600">Уже есть аккаунт? <button onclick="toggleAuth()" class="text-blue-600 hover:underline">Войти</button></p>
+        </div>
+        <p id="auth-error" class="text-red-500 mt-4 text-center hidden">Ошибка</p>
+    </div>
+
+    <!-- Экран доски -->
+    <div id="board-screen" class="hidden">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">Общая Kanban-доска</h1>
+                <p class="text-gray-600 text-sm">Ваша роль: <span id="user-role-display" class="font-bold text-blue-600"></span></p>
+            </div>
+            <div>
+                <button id="btn-create-board" onclick="showCreateBoardModal()" class="bg-blue-600 text-white px-4 py-2 rounded mr-2 hover:bg-blue-700 hidden">+ Доска</button>
+                <button id="btn-manage-users" onclick="showUserManagement()" class="bg-purple-600 text-white px-4 py-2 rounded mr-2 hover:bg-purple-700 hidden">Участники</button>
+                <button onclick="showAuditLog()" class="bg-indigo-600 text-white px-4 py-2 rounded mr-2 hover:bg-indigo-700">История</button>
+                <button onclick="doLogout()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Выйти</button>
+            </div>
+        </div>
+        
+        <div id="boards-list" class="mb-4 flex gap-2 items-center"></div>
+        
+        <div class="bg-gray-200 rounded-xl p-6 shadow-inner">
+            <div id="board-container" class="flex gap-4 overflow-x-auto pb-4 min-h-[200px]">
+                <p class="text-gray-500 text-center w-full py-10">Загрузка...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Окно для создания доски -->
+    <div id="create-board-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 class="text-xl font-bold mb-4">Создание новой доски</h3>
+            <input id="new-board-title" type="text" placeholder="Название доски" class="border rounded p-3 w-full mb-4">
+            <div class="flex gap-3">
+                <button onclick="createBoardFromModal()" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Создать</button>
+                <button onclick="closeCreateBoardModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Окно для редактирования доски -->
+    <div id="edit-board-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 class="text-xl font-bold mb-4">Переименование доски</h3>
+            <input id="edit-board-title" type="text" class="border rounded p-3 w-full mb-4">
+            <div class="flex gap-3">
+                <button onclick="saveBoardTitleFromModal()" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Сохранить</button>
+                <button onclick="closeEditBoardModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Окно подтверждения -->
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 class="text-xl font-bold mb-4 text-red-600">Подтверждение действия</h3>
+            <p id="confirm-message" class="text-gray-700 mb-6">Вы уверены?</p>
+            <div class="flex gap-3">
+                <button id="confirm-yes" class="flex-1 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Да</button>
+                <button id="confirm-no" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Окно для карточки -->
+    <div id="modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 class="text-xl font-bold mb-4" id="modal-title">Карточка</h3>
+            <input type="hidden" id="edit-card-id">
+            <input id="card-title" type="text" placeholder="Название" class="border rounded p-2 w-full mb-3">
+            <textarea id="card-desc" placeholder="Описание" class="border rounded p-2 w-full mb-3 h-20"></textarea>
+            
+            <div class="mb-3">
+                <label class="text-sm text-gray-600 block mb-1">Исполнитель:</label>
+                <select id="card-assignee" class="border rounded p-2 w-full bg-white">
+                    <option value="">Без исполнителя</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="text-sm text-gray-600 block mb-1">Дедлайн:</label>
+                    <input id="card-deadline" type="date" class="border rounded p-2 w-full">
+                </div>
+                <div>
+                    <label class="text-sm text-gray-600 block mb-1">Приоритет:</label>
+                    <select id="card-priority" class="border rounded p-2 w-full bg-white">
+                        <option value="low">Низкий</option>
+                        <option value="medium">Средний</option>
+                        <option value="high">Высокий</option>
+                    </select>
+                </div>
+            </div>
+
+            <button onclick="saveCard()" class="bg-blue-600 text-white px-4 py-2 rounded w-full mb-2">Сохранить</button>
+            <button onclick="closeModal()" class="text-gray-600 w-full py-2">Отмена</button>
+        </div>
+    </div>
+
+    <!-- Окно управления пользователями -->
+    <div id="users-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4">Управление ролями пользователей</h3>
+            <div id="users-list" class="space-y-2"></div>
+            <button onclick="closeUsersModal()" class="mt-4 bg-gray-200 px-4 py-2 rounded w-full hover:bg-gray-300">Закрыть</button>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('token');
+        let userRole = localStorage.getItem('userRole');
+        let boardId = null;
+        let colId = null;
+        let allUsers = [];
+        let editingBoardId = null;
+        let pendingRoleChange = null;
+
+        window.onload = () => { 
+            if (token && userRole) showBoard(); 
+        };
+
+        function toggleAuth() {
+            document.getElementById('login-form').classList.toggle('hidden');
+            document.getElementById('register-form').classList.toggle('hidden');
+            document.getElementById('auth-title').textContent = 
+                document.getElementById('login-form').classList.contains('hidden') ? 'Регистрация' : 'Вход в Kanban';
+            document.getElementById('auth-error').classList.add('hidden');
+        }
+
+        async function doLogin() {
+            const login = document.getElementById('login-input').value;
+            const pass = document.getElementById('pass-input').value;
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({login, password: pass})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    token = data.access_token;
+                    userRole = data.role;
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('userRole', userRole);
+                    showBoard();
+                } else {
+                    showError('Неверный логин или пароль');
+                }
+            } catch (e) { showError('Ошибка подключения'); }
+        }
+
+        async function doRegister() {
+            const login = document.getElementById('reg-login').value;
+            const pass = document.getElementById('reg-pass').value;
+            try {
+                const res = await fetch('/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({login, password: pass})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    token = data.access_token;
+                    userRole = data.role;
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('userRole', userRole);
+                    showBoard();
+                } else {
+                    const err = await res.json();
+                    showError(err.detail || 'Ошибка регистрации');
+                }
+            } catch (e) { showError('Ошибка подключения'); }
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('auth-error');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        function doLogout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('userRole');
+            token = null;
+            userRole = null;
+            location.reload();
+        }
+
+        function showBoard() {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('board-screen').classList.remove('hidden');
+            document.getElementById('user-role-display').textContent = userRole.toUpperCase();
+            
+            if (userRole !== 'reader') {
+                document.getElementById('btn-create-board').classList.remove('hidden');
+            }
+            if (userRole === 'owner') {
+                document.getElementById('btn-manage-users').classList.remove('hidden');
+            }
+            
+            loadBoards();
+        }
+
+        async function loadBoards() {
+            const res = await fetch('/boards', {headers: {'Authorization': 'Bearer ' + token}});
+            if (res.ok) {
+                const boards = await res.json();
+                const div = document.getElementById('boards-list');
+                div.innerHTML = '';
+                boards.forEach(b => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'flex items-center bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden';
+                    
+                    const btn = document.createElement('button');
+                    btn.className = `px-4 py-2 font-semibold flex-1 text-left ${boardId === b.id ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`;
+                    btn.textContent = b.title;
+                    btn.onclick = () => { boardId = b.id; loadBoards(); loadBoard(); };
+                    wrapper.appendChild(btn);
+
+                    if (userRole !== 'reader') {
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'bg-yellow-500 text-white px-3 py-2 hover:bg-yellow-600 border-l border-white';
+                        editBtn.innerHTML = '✎';
+                        editBtn.title = 'Переименовать';
+                        editBtn.onclick = () => showEditBoardModal(b.id, b.title);
+                        wrapper.appendChild(editBtn);
+
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'bg-red-500 text-white px-3 py-2 hover:bg-red-600 border-l border-white';
+                        delBtn.innerHTML = '✕';
+                        delBtn.title = 'Удалить доску';
+                        delBtn.onclick = () => showDeleteConfirm('board', b.id);
+                        wrapper.appendChild(delBtn);
+                    }
+                    div.appendChild(wrapper);
+                });
+                if (boards.length > 0 && !boardId) { boardId = boards[0].id; loadBoard(); }
+            }
+        }
+
+        function showCreateBoardModal() {
+            document.getElementById('create-board-modal').classList.remove('hidden');
+            document.getElementById('new-board-title').value = '';
+            document.getElementById('new-board-title').focus();
+        }
+
+        function closeCreateBoardModal() {
+            document.getElementById('create-board-modal').classList.add('hidden');
+        }
+
+        function showEditBoardModal(id, currentTitle) {
+            editingBoardId = id;
+            document.getElementById('edit-board-modal').classList.remove('hidden');
+            document.getElementById('edit-board-title').value = currentTitle;
+            document.getElementById('edit-board-title').focus();
+            document.getElementById('edit-board-title').select();
+        }
+
+        function closeEditBoardModal() {
+            document.getElementById('edit-board-modal').classList.add('hidden');
+            editingBoardId = null;
+        }
+
+        async function createBoardFromModal() {
+            const title = document.getElementById('new-board-title').value.trim();
+            if (!title) {
+                alert('Введите название доски');
+                return;
+            }
+            
+            const res = await fetch('/boards', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                body: JSON.stringify({title})
+            });
+            if (res.ok) {
+                boardId = (await res.json()).id;
+                closeCreateBoardModal();
+                loadBoards();
+                loadBoard();
+            } else {
+                alert('Ошибка создания доски');
+            }
+        }
+
+        async function saveBoardTitleFromModal() {
+            const newTitle = document.getElementById('edit-board-title').value.trim();
+            if (!newTitle) {
+                alert('Название доски не может быть пустым');
+                return;
+            }
+            if (!editingBoardId) return;
+            
+            const res = await fetch(`/boards/${editingBoardId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                body: JSON.stringify({title: newTitle})
+            });
+            if (res.ok) {
+                closeEditBoardModal();
+                loadBoards();
+            } else {
+                alert('Ошибка при сохранении названия');
+            }
+        }
+
+        function showDeleteConfirm(type, id) {
+            const modal = document.getElementById('confirm-modal');
+            const message = document.getElementById('confirm-message');
+            const yesBtn = document.getElementById('confirm-yes');
+            const noBtn = document.getElementById('confirm-no');
+            
+            let text = '';
+            if (type === 'board') {
+                text = 'Вы уверены, что хотите удалить эту доску и все её карточки?';
+            } else if (type === 'column') {
+                text = 'Вы уверены, что хотите удалить эту колонку и все карточки в ней?';
+            } else if (type === 'card') {
+                text = 'Вы уверены, что хотите удалить эту карточку?';
+            }
+            
+            message.textContent = text;
+            modal.classList.remove('hidden');
+            
+            const newYesBtn = yesBtn.cloneNode(true);
+            yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
+            
+            const newNoBtn = noBtn.cloneNode(true);
+            noBtn.parentNode.replaceChild(newNoBtn, noBtn);
+            
+            newYesBtn.addEventListener('click', function() {
+                if (type === 'board') deleteBoard(id);
+                else if (type === 'column') deleteColumn(id);
+                else if (type === 'card') deleteCard(id);
+                modal.classList.add('hidden');
+            });
+            
+            newNoBtn.addEventListener('click', function() {
+                modal.classList.add('hidden');
+            });
+        }
+
+        document.getElementById('new-board-title')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') createBoardFromModal();
+        });
+
+        document.getElementById('edit-board-title')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') saveBoardTitleFromModal();
+        });
+
+        async function deleteBoard(id) {
+            await fetch(`/boards/${id}`, {method: 'DELETE', headers: {'Authorization': 'Bearer ' + token}});
+            boardId = null;
+            loadBoards();
+            document.getElementById('board-container').innerHTML = '<p class="text-gray-500 text-center w-full py-10">Выберите или создайте доску</p>';
+        }
+
+        async function loadUsersForAssignee() {
+            try {
+                const res = await fetch('/users', {headers: {'Authorization': 'Bearer ' + token}});
+                if (res.ok) {
+                    allUsers = await res.json();
+                    const select = document.getElementById('card-assignee');
+                    select.innerHTML = '<option value="">Без исполнителя</option>';
+                    allUsers.forEach(u => {
+                        const opt = document.createElement('option');
+                        opt.value = u.login;
+                        opt.textContent = u.login + (u.role === 'owner' ? ' (Владелец)' : '');
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to load users for assignee', e);
+            }
+        }
+
+        async function loadBoard() {
+            if (!boardId) return;
+            try {
+                const colsRes = await fetch(`/boards/${boardId}/columns`, {headers: {'Authorization': 'Bearer ' + token}});
+                const columns = await colsRes.json();
+                
+                const cardsRes = await fetch(`/boards/${boardId}/cards`, {headers: {'Authorization': 'Bearer ' + token}});
+                const cards = cardsRes.ok ? await cardsRes.json() : [];
+                
+                const container = document.getElementById('board-container');
+                container.innerHTML = '';
+                const colors = ['bg-blue-100', 'bg-yellow-100', 'bg-purple-100', 'bg-green-100'];
+
+                columns.forEach((col, idx) => {
+                    const colCards = cards.filter(c => c.column_id === col.id);
+                    const colDiv = document.createElement('div');
+                    colDiv.className = `w-80 flex-shrink-0 ${colors[idx % colors.length]} rounded-xl p-4`;
+                    
+                    let colHeader = `<h3 class="font-bold text-lg mb-4 text-gray-800">${col.title}</h3>`;
+                    if (userRole !== 'reader') {
+                        colHeader += `<button onclick="showDeleteConfirm('column', ${col.id})" class="text-xs text-red-500 hover:underline mb-2 block">Удалить колонку</button>`;
+                    }
+
+                    colDiv.innerHTML = colHeader + `
+                        <div class="cards space-y-3 min-h-[100px]" data-col="${col.id}">
+                            ${colCards.map(c => `
+                                <div class="card bg-white p-4 rounded-lg shadow cursor-move border-l-4 ${getPriorityBorder(c.priority)} relative group" data-id="${c.id}">
+                                    ${userRole !== 'reader' ? `<button onclick="showDeleteConfirm('card', ${c.id})" class="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>` : ''}
+                                    <div class="font-semibold mb-1 pr-6">${c.title}</div>
+                                    ${c.description ? `<div class="text-sm text-gray-600 mb-2">${c.description}</div>` : ''}
+                                    <div class="flex flex-wrap gap-2 text-xs mt-2">
+                                        ${c.assignee ? `<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded">👤 ${c.assignee}</span>` : ''}
+                                        ${c.deadline ? `<span class="bg-gray-200 px-2 py-1 rounded">📅 ${new Date(c.deadline).toLocaleDateString()}</span>` : ''}
+                                        <span class="${getPriorityBadge(c.priority)} px-2 py-1 rounded">${c.priority}</span>
+                                    </div>
+                                    ${userRole !== 'reader' ? `<button onclick='openModal(${col.id}, ${JSON.stringify(c).replace(/'/g, "&#39;")})' class="mt-3 w-full text-xs text-blue-600 hover:underline text-left">Редактировать</button>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                        ${userRole !== 'reader' ? `<button onclick="openModal(${col.id})" class="w-full mt-3 p-2 border-2 border-dashed border-gray-400 rounded text-gray-600 hover:border-blue-500 hover:text-blue-600">+ Карточка</button>` : ''}
+                    `;
+                    container.appendChild(colDiv);
+                });
+
+                if (userRole !== 'reader') {
+                    document.querySelectorAll('.cards').forEach(el => {
+                        new Sortable(el, {
+                            group: 'kanban',
+                            animation: 150,
+                            onEnd: async function(evt) {
+                                await fetch(`/cards/${evt.item.getAttribute('data-id')}/move`, {
+                                    method: 'PUT',
+                                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                                    body: JSON.stringify({
+                                        column_id: parseInt(evt.to.getAttribute('data-col')),
+                                        position: evt.newIndex
+                                    })
+                                });
+                            }
+                        });
+                    });
+                }
+            } catch (err) {
+                console.error('Error loading board:', err);
+            }
+        }
+
+        function getPriorityBorder(p) {
+            return p === 'high' ? 'border-red-500' : p === 'medium' ? 'border-yellow-500' : 'border-green-500';
+        }
+
+        function getPriorityBadge(p) {
+            return p === 'high' ? 'bg-red-100 text-red-800' : p === 'medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800';
+        }
+
+        function openModal(colIdParam, cardData = null) {
+            colId = colIdParam;
+            document.getElementById('edit-card-id').value = cardData ? cardData.id : '';
+            document.getElementById('modal-title').textContent = cardData ? 'Редактировать карточку' : 'Новая карточка';
+            
+            document.getElementById('card-title').value = cardData ? cardData.title : '';
+            document.getElementById('card-desc').value = cardData ? (cardData.description || '') : '';
+            document.getElementById('card-deadline').value = cardData && cardData.deadline ? new Date(cardData.deadline).toISOString().split('T')[0] : '';
+            document.getElementById('card-priority').value = cardData ? cardData.priority : 'medium';
+            
+            loadUsersForAssignee().then(() => {
+                document.getElementById('card-assignee').value = cardData ? (cardData.assignee || '') : '';
+            });
+            
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+        }
+
+        async function saveCard() {
+            const title = document.getElementById('card-title').value;
+            if (!title) { alert('Введите название'); return; }
+            
+            const cardId = document.getElementById('edit-card-id').value;
+            const payload = {
+                title,
+                description: document.getElementById('card-desc').value,
+                priority: document.getElementById('card-priority').value,
+                assignee: document.getElementById('card-assignee').value || null,
+                deadline: document.getElementById('card-deadline').value || null
+            };
+
+            try {
+                let res;
+                if (cardId) {
+                    res = await fetch(`/cards/${cardId}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                        body: JSON.stringify(payload)
+                    });
+                } else {
+                    payload.column_id = colId;
+                    payload.position = 0;
+                    res = await fetch('/cards', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                        body: JSON.stringify(payload)
+                    });
+                }
+                
+                if (res.ok) {
+                    closeModal();
+                    await loadBoard();
+                } else {
+                    const err = await res.json();
+                    alert('Ошибка: ' + (err.detail || 'Не удалось сохранить'));
+                }
+            } catch (err) {
+                alert('Ошибка подключения');
+            }
+        }
+
+        async function deleteCard(id) {
+            await fetch(`/cards/${id}`, {method: 'DELETE', headers: {'Authorization': 'Bearer ' + token}});
+            await loadBoard();
+        }
+
+        async function deleteColumn(id) {
+            await fetch(`/columns/${id}`, {method: 'DELETE', headers: {'Authorization': 'Bearer ' + token}});
+            await loadBoard();
+        }
+
+        async function showUserManagement() {
+            if (userRole !== 'owner') {
+                alert('Только владелец может управлять ролями');
+                return;
+            }
+            
+            try {
+                const res = await fetch('/users', {headers: {'Authorization': 'Bearer ' + token}});
+                if (res.ok) {
+                    const users = await res.json();
+                    const listDiv = document.getElementById('users-list');
+                    listDiv.innerHTML = '';
+                    
+                    users.forEach(u => {
+                        const userDiv = document.createElement('div');
+                        userDiv.className = 'flex justify-between items-center p-3 bg-gray-50 rounded';
+                        userDiv.innerHTML = `
+                            <div>
+                                <span class="font-semibold">${u.login}</span>
+                                <span class="ml-2 px-2 py-1 rounded text-xs ${getRoleBadgeClass(u.role)}">${u.role}</span>
+                            </div>
+                            ${u.login !== 'admin' ? `
+                                <select onchange="changeUserRole(${u.id}, this.value)" class="border rounded p-1 text-sm bg-white">
+                                    <option value="reader" ${u.role === 'reader' ? 'selected' : ''}>Читатель</option>
+                                    <option value="writer" ${u.role === 'writer' ? 'selected' : ''}>Писатель</option>
+                                    <option value="owner" ${u.role === 'owner' ? 'selected' : ''}>Владелец</option>
+                                </select>
+                            ` : '<span class="text-xs text-gray-500">Главный админ</span>'}
+                        `;
+                        listDiv.appendChild(userDiv);
+                    });
+                    
+                    document.getElementById('users-modal').classList.remove('hidden');
+                }
+            } catch (e) {
+                alert('Ошибка загрузки списка пользователей');
+            }
+        }
+
+        function getRoleBadgeClass(role) {
+            const classes = {
+                'reader': 'bg-gray-200 text-gray-800',
+                'writer': 'bg-blue-200 text-blue-800',
+                'owner': 'bg-purple-200 text-purple-800'
+            };
+            return classes[role] || classes.reader;
+        }
+
+        function changeUserRole(userId, newRole) {
+            pendingRoleChange = { userId, newRole };
+            
+            const modal = document.getElementById('confirm-modal');
+            const message = document.getElementById('confirm-message');
+            const yesBtn = document.getElementById('confirm-yes');
+            const noBtn = document.getElementById('confirm-no');
+            
+            message.textContent = `Изменить роль пользователя на ${newRole.toUpperCase()}?`;
+            modal.classList.remove('hidden');
+            
+            const newYesBtn = yesBtn.cloneNode(true);
+            yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
+            
+            const newNoBtn = noBtn.cloneNode(true);
+            noBtn.parentNode.replaceChild(newNoBtn, noBtn);
+            
+            newYesBtn.addEventListener('click', async function() {
+                modal.classList.add('hidden');
+                await executeRoleChange();
+            });
+            
+            newNoBtn.addEventListener('click', function() {
+                modal.classList.add('hidden');
+                pendingRoleChange = null;
+                showUserManagement();
+            });
+        }
+
+        async function executeRoleChange() {
+            if (!pendingRoleChange) return;
+            const { userId, newRole } = pendingRoleChange;
+            
+            try {
+                const res = await fetch(`/users/${userId}/role`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                    body: JSON.stringify({role: newRole})
+                });
+                
+                if (res.ok) {
+                    showUserManagement();
+                } else {
+                    const err = await res.json();
+                    alert('Ошибка: ' + (err.detail || 'Не удалось изменить роль'));
+                    showUserManagement();
+                }
+            } catch (e) {
+                alert('Ошибка подключения');
+                showUserManagement();
+            } finally {
+                pendingRoleChange = null;
+            }
+        }
+
+        function closeUsersModal() {
+            document.getElementById('users-modal').classList.add('hidden');
+        }
+
+        async function showAuditLog() {
+            try {
+                const res = await fetch('/audit-log', {headers: {'Authorization': 'Bearer ' + token}});
+                if (res.ok) {
+                    const logs = await res.json();
+                    let logHtml = '<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]"><div class="bg-white rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">';
+                    logHtml += '<h3 class="text-xl font-bold mb-4">Audit Log - История изменений</h3>';
+                    logHtml += '<table class="w-full text-sm"><thead><tr class="bg-gray-100"><th class="p-2 text-left">Время</th><th class="p-2 text-left">Пользователь</th><th class="p-2 text-left">Действие</th><th class="p-2 text-left">Сущность</th><th class="p-2 text-left">Изменения</th></tr></thead><tbody>';
+                    
+                    logs.forEach(log => {
+                        const time = new Date(log.timestamp).toLocaleString('ru-RU');
+                        const changes = log.old_value ? `${log.old_value} → ${log.new_value}` : (log.new_value || '-');
+                        logHtml += `<tr class="border-b"><td class="p-2">${time}</td><td class="p-2">${log.user_login}</td><td class="p-2"><span class="px-2 py-1 rounded ${log.action === 'CREATE' ? 'bg-green-100 text-green-800' : log.action === 'DELETE' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">${log.action}</span></td><td class="p-2">${log.entity_type} #${log.entity_id}</td><td class="p-2 text-xs">${changes}</td></tr>`;
+                    });
+                    
+                    if (logs.length === 0) {
+                        logHtml += '<tr><td colspan="5" class="p-4 text-center text-gray-500">Нет записей</td></tr>';
+                    }
+                    
+                    logHtml += '</tbody></table><button onclick="this.closest(\'.fixed\').remove()" class="mt-4 bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">Закрыть</button></div></div>';
+                    document.body.insertAdjacentHTML('beforeend', logHtml);
+                }
+            } catch (e) {
+                alert('Ошибка загрузки audit log');
+            }
+        }
+
+        document.getElementById('modal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+        
+        document.getElementById('users-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeUsersModal();
+        });
+
+        document.getElementById('create-board-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeCreateBoardModal();
+        });
+
+        document.getElementById('edit-board-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeEditBoardModal();
+        });
+
+        document.getElementById('confirm-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                document.getElementById('confirm-modal').classList.add('hidden');
+                pendingRoleChange = null;
+                showUserManagement();
+            }
+        });
+    </script>
+</body>
+</html>
